@@ -35,6 +35,26 @@ type ScanOptions struct {
 	Verbose    io.Writer
 }
 
+type PolicyIdentity struct {
+	ToolVersion string `json:"tool_version"`
+	Profile     struct {
+		Name    string `json:"name"`
+		Version int    `json:"version"`
+	} `json:"profile"`
+	EffectiveConfigSHA256 string `json:"effective_config_sha256"`
+}
+
+func DescribePolicy(configPath, toolVersion string) (PolicyIdentity, error) {
+	cfg, _, err := loadConfig(configPath)
+	if err != nil {
+		return PolicyIdentity{}, exitError(ExitUsage, "invalid configuration: %v", err)
+	}
+	identity := PolicyIdentity{ToolVersion: toolVersion, EffectiveConfigSHA256: effectiveConfigHash(cfg)}
+	identity.Profile.Name = cfg.Profile.Name
+	identity.Profile.Version = cfg.Profile.Version
+	return identity, nil
+}
+
 type scanner struct {
 	cfg            *config.Config
 	detector       detect.Detector

@@ -1,6 +1,6 @@
 # Attachment Gate
 
-Current version: `0.1.0`. Manifest schema: v1.
+Current version: `0.1.1`. Manifest schema: v1.
 
 Attachment Gate is a small Go CLI that turns an untrusted upload batch into a read-only set of approved files plus an auditable JSON manifest. It verifies declared sizes and hashes, detects real file types with libmagic, scans with ClamAV, and safely expands ZIP files.
 
@@ -67,6 +67,8 @@ Start from [configs/attachment-gate-v1.yaml](configs/attachment-gate-v1.yaml), s
 ```sh
 attachment-gate doctor --config /etc/attachment-gate/v1.yaml
 
+attachment-gate policy --config /etc/attachment-gate/v1.yaml
+
 attachment-gate scan \
   --input /var/lib/attachment-gate/quarantine/batch-01 \
   --output /var/lib/attachment-gate/results/batch-01 \
@@ -74,6 +76,8 @@ attachment-gate scan \
 
 attachment-gate version
 ```
+
+`policy` prints canonical JSON containing the tool version, profile name and version, and the same effective configuration SHA-256 written into scan manifests.
 
 `scan` is quiet by default; `--verbose` writes file IDs and decisions to stderr without file contents. The manifest is the business result. Exit `0` includes `all_approved`, `partial`, and `none_approved` outcomes.
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 // version is intentionally committed so downstream release manifests can pin
 // the exact Attachment Gate contract. Release builds may still override it
 // with -ldflags "-X main.version=...".
-var version = "0.1.0"
+var version = "0.1.1"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -27,7 +28,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintln(stderr, "usage: attachment-gate <scan|doctor|version>")
+		_, _ = fmt.Fprintln(stderr, "usage: attachment-gate <scan|doctor|policy|version>")
 		return app.ExitUsage
 	}
 	var err error
@@ -57,6 +58,20 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 			return app.ExitUsage
 		}
 		err = app.Doctor(ctx, *configPath)
+	case "policy":
+		flags := flag.NewFlagSet("policy", flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		configPath := flags.String("config", "", "configuration file")
+		if flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *configPath == "" {
+			_, _ = fmt.Fprintln(stderr, "usage: attachment-gate policy --config FILE")
+			return app.ExitUsage
+		}
+		identity, identityErr := app.DescribePolicy(*configPath, version)
+		if identityErr != nil {
+			err = identityErr
+		} else {
+			err = json.NewEncoder(stdout).Encode(identity)
+		}
 	case "version":
 		if len(args) != 1 {
 			return app.ExitUsage
@@ -64,7 +79,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stdout, "attachment-gate %s\n", version)
 		return app.ExitOK
 	default:
-		_, _ = fmt.Fprintln(stderr, "usage: attachment-gate <scan|doctor|version>")
+		_, _ = fmt.Fprintln(stderr, "usage: attachment-gate <scan|doctor|policy|version>")
 		return app.ExitUsage
 	}
 	if err == nil {
