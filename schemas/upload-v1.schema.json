@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://attachment-gate.invalid/schemas/upload-v1.schema.json",
+  "title": "Attachment Gate upload batch v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "batch_id", "files"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "batch_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attachment_id", "blob_name", "original_name", "uploaded_size", "uploaded_sha256"],
+        "properties": {
+          "attachment_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "blob_name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "original_name": { "type": "string", "minLength": 1, "maxLength": 1024 },
+          "declared_content_type": { "type": "string", "maxLength": 255 },
+          "uploaded_size": { "type": "integer", "minimum": 0 },
+          "uploaded_sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" }
+        }
+      }
+    }
+  }
+}

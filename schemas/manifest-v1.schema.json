@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://attachment-gate.invalid/schemas/manifest-v1.schema.json",
+  "title": "Attachment Gate result manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scan_id", "batch_id", "status", "outcome", "started_at", "finished_at", "policy", "engines", "summary", "files"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "scan_id": { "type": "string", "minLength": 1 },
+    "batch_id": { "type": "string", "minLength": 1 },
+    "status": { "const": "completed" },
+    "outcome": { "enum": ["all_approved", "partial", "none_approved"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "sha256"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "engines": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type_detector", "malware"],
+      "properties": {
+        "type_detector": { "$ref": "#/$defs/engine" },
+        "malware": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "engine_version", "database_version", "database_time"],
+          "properties": {
+            "name": { "type": "string" },
+            "engine_version": { "type": "string" },
+            "database_version": { "type": "string" },
+            "database_time": { "type": "string" }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uploaded_files", "discovered_files", "approved_files", "rejected_files", "approved_bytes"],
+      "properties": {
+        "uploaded_files": { "type": "integer", "minimum": 0 },
+        "discovered_files": { "type": "integer", "minimum": 0 },
+        "approved_files": { "type": "integer", "minimum": 0 },
+        "rejected_files": { "type": "integer", "minimum": 0 },
+        "approved_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "$defs": {
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "parent_id", "attachment_id", "source_path", "output_path", "origin", "kind", "size", "sha256", "detected", "decision", "action", "warnings"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "parent_id": { "type": ["string", "null"] },
+        "attachment_id": { "type": "string", "minLength": 1 },
+        "source_path": { "type": "string", "minLength": 1 },
+        "output_path": { "type": ["string", "null"] },
+        "origin": { "enum": ["upload", "archive"] },
+        "kind": { "enum": ["file", "container"] },
+        "size": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "detected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type", "mime", "extension"],
+          "properties": {
+            "type": { "type": "string" },
+            "mime": { "type": "string" },
+            "extension": { "type": "string" }
+          }
+        },
+        "decision": { "enum": ["approved", "rejected"] },
+        "action": { "enum": ["copied", "expanded", "omitted"] },
+        "reason": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code"],
+          "properties": {
+            "code": {
+              "enum": [
+                "file_too_large", "type_not_allowed", "unknown_type", "type_detector_error", "extension_mismatch",
+                "malware_found", "malware_scan_error", "malware_scan_timeout", "archive_invalid", "archive_encrypted",
+                "archive_limit_exceeded", "archive_path_unsafe", "archive_duplicate_path", "archive_checksum_error",
+                "archive_unsupported", "nested_archive_not_allowed", "office_macro_not_allowed", "legacy_office_not_allowed",
+                "symlink_not_allowed", "special_file_not_allowed", "executable_not_allowed", "secret_file_not_allowed",
+                "excluded_path", "invalid_text_encoding", "image_dimensions_exceeded"
+              ]
+            }
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code"],
+            "properties": {
+              "code": { "type": "string", "minLength": 1 },
+              "declared_extension": { "type": "string" },
+              "expected_extensions": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "decision": { "const": "approved" } }, "required": ["decision"] },
+          "then": {
+            "properties": {
+              "output_path": { "type": "string", "minLength": 1 },
+              "action": { "enum": ["copied", "expanded"] }
+            },
+            "not": { "required": ["reason"] }
+          }
+        },
+        {
+          "if": { "properties": { "decision": { "const": "rejected" } }, "required": ["decision"] },
+          "then": {
+            "required": ["reason"],
+            "properties": {
+              "output_path": { "type": "null" },
+              "action": { "const": "omitted" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "action": { "const": "copied" } }, "required": ["action"] },
+          "then": { "properties": { "kind": { "const": "file" } } }
+        },
+        {
+          "if": { "properties": { "action": { "const": "expanded" } }, "required": ["action"] },
+          "then": { "properties": { "kind": { "const": "container" } } }
+        }
+      ]
+    }
+  }
+}

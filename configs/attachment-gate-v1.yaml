@@ -1,0 +1,89 @@
+schema_version: 1
+profile:
+  name: attachment-gate-v1
+  version: 1
+
+roots:
+  quarantine: /var/lib/attachment-gate/quarantine
+  results: /var/lib/attachment-gate/results
+
+limits:
+  max_input_files: 20
+  max_input_file_size: 50MiB
+  max_input_total_size: 100MiB
+  max_discovered_files: 2000
+  max_extracted_file_size: 50MiB
+  max_extracted_total_size: 300MiB
+  max_archive_entries: 2000
+  max_compression_ratio: 200
+  max_path_depth: 20
+  max_relative_path_bytes: 512
+  max_image_pixels: 40000000
+  batch_timeout: 120s
+  file_scan_timeout: 30s
+
+archives:
+  enabled: true
+  allowed_formats: [zip]
+  nested_archive: reject_entry
+  encrypted_archive: reject_container
+  unsafe_path: reject_container
+  malformed_archive: reject_container
+
+malware:
+  enabled: true
+  required: true
+  socket: unix:///run/clamav/clamd.sock
+  max_database_age: 72h
+
+policy:
+  unknown_type: reject
+  detector_error: reject_file
+  extension_mismatch: warn
+  malware_scan_error: reject_batch
+  office_macros: reject
+  legacy_office: reject
+
+allowed_types:
+  - document_pdf
+  - document_docx
+  - document_xlsx
+  - document_pptx
+  - text_plain
+  - text_source
+  - text_data
+  - image_png
+  - image_jpeg
+  - image_webp
+  - archive_zip
+
+paths:
+  exclude_directory_names:
+    - .git
+    - .svn
+    - .hg
+    - node_modules
+    - .venv
+    - venv
+    - __pycache__
+    - target
+    - dist
+    - build
+    - .idea
+    - .vscode
+  exclude_file_names:
+    - .env
+    - id_rsa
+    - id_dsa
+    - id_ecdsa
+    - id_ed25519
+    - credentials.json
+    - service-account.json
+  exclude_extensions: [.pem, .key, .p12, .pfx, .jks, .keystore]
+
+output:
+  file_mode: "0440"
+  directory_mode: "0550"
+  preserve_timestamps: false
+  preserve_permissions: false
+  preserve_extended_attributes: false
