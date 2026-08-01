@@ -1,5 +1,7 @@
 # Attachment Gate
 
+Current version: `0.1.0`. Manifest schema: v1.
+
 Attachment Gate is a small Go CLI that turns an untrusted upload batch into a read-only set of approved files plus an auditable JSON manifest. It verifies declared sizes and hashes, detects real file types with libmagic, scans with ClamAV, and safely expands ZIP files.
 
 Approval means that a file passed the configured file-level policy. It is not proof that the content is true, harmless to every parser, or safe to execute.

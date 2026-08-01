@@ -14,7 +14,10 @@ import (
 	"github.com/Xarth-Mai/Attachment-Gate/internal/app"
 )
 
-var version = "dev"
+// version is intentionally committed so downstream release manifests can pin
+// the exact Attachment Gate contract. Release builds may still override it
+// with -ldflags "-X main.version=...".
+var version = "0.1.0"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
