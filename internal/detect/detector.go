@@ -317,9 +317,10 @@ func readZipFile(ctx context.Context, entry *zip.File, limit int64) ([]byte, err
 
 func textType(extension string) Type {
 	switch extension {
-	case ".svg", ".rtf", ".html", ".htm", ".css":
+	case ".svg", ".rtf":
 		return TypeUnknownBinary
-	case ".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".java",
+	case ".html", ".htm", ".css",
+		".py", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".java",
 		".c", ".h", ".cc", ".cpp", ".cxx", ".hh", ".hpp", ".go", ".rs",
 		".cs", ".kt", ".kts", ".swift", ".scala", ".rb", ".php", ".r",
 		".m", ".lua", ".sh", ".bash", ".zsh", ".fish", ".ps1", ".bat", ".cmd":
@@ -336,8 +337,8 @@ func textMIMEDenied(mediaType string) bool {
 	return strings.HasPrefix(mediaType, "image/") || strings.HasPrefix(mediaType, "audio/") ||
 		strings.HasPrefix(mediaType, "video/") || strings.HasPrefix(mediaType, "font/") ||
 		strings.HasPrefix(mediaType, "application/font") || strings.HasPrefix(mediaType, "application/x-font") ||
-		mediaType == "application/rtf" || mediaType == "text/rtf" || mediaType == "text/html" ||
-		mediaType == "text/css" || mediaType == "application/xhtml+xml" || mediaType == "application/postscript"
+		mediaType == "application/rtf" || mediaType == "text/rtf" ||
+		mediaType == "application/xhtml+xml" || mediaType == "application/postscript"
 }
 
 func validTextFile(ctx context.Context, filePath string) (bool, error) {

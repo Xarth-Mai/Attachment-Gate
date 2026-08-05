@@ -81,6 +81,26 @@ func TestTextRequiresValidEncodingBeforeExtensionClassification(t *testing.T) {
 	}
 }
 
+func TestHtmlCssClassifiedAsTextSource(t *testing.T) {
+	tests := []struct {
+		ext, mime string
+	}{
+		{".html", "text/html"},
+		{".htm", "text/html"},
+		{".css", "text/css"},
+	}
+	for _, test := range tests {
+		path := writeFile(t, "blob", []byte("<!doctype html><p>hi</p>"))
+		got, err := (Detector{}).classify(context.Background(), path, Result{MIME: test.mime, Extension: test.ext})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Type != TypeTextSource {
+			t.Fatalf("%s = %q, want %q", test.ext, got.Type, TypeTextSource)
+		}
+	}
+}
+
 func TestTextEncodings(t *testing.T) {
 	utf16LE := []byte{0xff, 0xfe, 'h', 0, 'i', 0}
 	tests := []struct {
