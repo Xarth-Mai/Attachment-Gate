@@ -211,12 +211,16 @@ func (s *scanner) processUpload(ctx context.Context, file *batch.File, scanPath 
 		return s.processArchive(ctx, file, scanPath, index, total, name, result, record)
 	}
 	if unsupportedArchiveMIME(result.MIME) {
-		s.reject(&record, "archive_unsupported")
+		record.Warnings = append(record.Warnings, manifest.Warning{Code: "archive_unsupported", DeclaredExtension: result.Extension})
+	}
+	if s.cfg.Policy.Executable == "reject" && isExecutableType(result.Type) {
+		s.reject(&record, "executable_not_allowed")
 		return nil
 	}
-	if reason := rejectionFor(result, s.allowed); reason != "" {
-		s.reject(&record, reason)
-		return nil
+	if isExecutableType(result.Type) {
+		record.Warnings = append(record.Warnings, manifest.Warning{Code: "executable_found", DeclaredExtension: result.Extension})
+	} else if warning := warningFor(result, s.allowed); warning != nil {
+		record.Warnings = append(record.Warnings, *warning)
 	}
 	if s.applyExtensionPolicy(&record, result) {
 		return nil
@@ -423,19 +427,22 @@ func (s *scanner) processArchiveFile(ctx context.Context, physical, sourceRelati
 
 	result, err := s.detect(ctx, physical, outputRelative)
 	record.Detected = detected(result)
-	if result.Type == detect.TypeArchiveZIP {
-		record.Kind = "container"
-	}
 	if err != nil {
 		return s.detectorFailure(ctx, &record, err)
 	}
 	if nestedArchive(result) {
-		s.reject(&record, "nested_archive_not_allowed")
+		record.Warnings = append(record.Warnings, manifest.Warning{Code: "nested_archive_not_allowed", DeclaredExtension: result.Extension})
+	} else if result.Type == detect.TypeArchiveZIP {
+		record.Kind = "container"
+	}
+	if s.cfg.Policy.Executable == "reject" && isExecutableType(result.Type) {
+		s.reject(&record, "executable_not_allowed")
 		return nil
 	}
-	if reason := rejectionFor(result, s.allowed); reason != "" {
-		s.reject(&record, reason)
-		return nil
+	if isExecutableType(result.Type) {
+		record.Warnings = append(record.Warnings, manifest.Warning{Code: "executable_found", DeclaredExtension: result.Extension})
+	} else if warning := warningFor(result, s.allowed); warning != nil {
+		record.Warnings = append(record.Warnings, *warning)
 	}
 	if s.applyExtensionPolicy(&record, result) {
 		return nil

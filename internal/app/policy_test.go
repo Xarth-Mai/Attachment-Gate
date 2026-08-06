@@ -8,8 +8,21 @@ import (
 )
 
 func TestPolicyHelpers(t *testing.T) {
-	if got := rejectionFor(detect.Result{Type: detect.TypeExecutablePE}, map[string]bool{}); got != "executable_not_allowed" {
-		t.Fatal(got)
+	if !isExecutableType(detect.TypeExecutablePE) || isExecutableType(detect.TypeDocumentPDF) {
+		t.Fatal("executable classification is wrong")
+	}
+	if got := warningFor(detect.Result{Type: detect.TypeOfficeMacro}, map[string]bool{}); got == nil || got.Code != "office_macro_found" {
+		t.Fatalf("macro warning missing: %+v", got)
+	}
+	if got := warningFor(detect.Result{Type: detect.TypeUnknownBinary, MIME: "application/octet-stream"}, map[string]bool{}); got == nil || got.Code != "unknown_type" {
+		t.Fatalf("unknown warning missing: %+v", got)
+	}
+	allowed := map[string]bool{"document_pdf": true}
+	if got := warningFor(detect.Result{Type: detect.TypeDocumentPDF, MIME: "application/pdf", Extension: ".pdf"}, allowed); got != nil {
+		t.Fatalf("allowed type must not warn: %+v", got)
+	}
+	if got := warningFor(detect.Result{Type: detect.TypeDocumentPDF, MIME: "application/pdf"}, map[string]bool{}); got == nil || got.Code != "type_not_allowed" {
+		t.Fatalf("disallowed type warning missing: %+v", got)
 	}
 	if got := excludedPath("src/.git/config", []string{".git"}, nil, nil); got != "excluded_path" {
 		t.Fatal(got)

@@ -9,26 +9,33 @@ import (
 	"github.com/Xarth-Mai/Attachment-Gate/internal/manifest"
 )
 
-func rejectionFor(result detect.Result, allowed map[string]bool) string {
-	switch result.Type {
-	case detect.TypeOfficeMacro:
-		return "office_macro_not_allowed"
-	case detect.TypeLegacyOffice:
-		return "legacy_office_not_allowed"
+func isExecutableType(kind detect.Type) bool {
+	switch kind {
 	case detect.TypeExecutablePE, detect.TypeExecutableELF, detect.TypeExecutableMachO,
 		detect.TypeSharedLibrary, detect.TypeObjectFile, detect.TypeApplicationPackage,
 		detect.TypeDiskImage:
-		return "executable_not_allowed"
+		return true
+	default:
+		return false
+	}
+}
+
+func warningFor(result detect.Result, allowed map[string]bool) *manifest.Warning {
+	switch result.Type {
+	case detect.TypeOfficeMacro:
+		return &manifest.Warning{Code: "office_macro_found", DeclaredExtension: result.Extension}
+	case detect.TypeLegacyOffice:
+		return &manifest.Warning{Code: "legacy_office_found", DeclaredExtension: result.Extension}
 	case detect.TypeUnknownBinary:
 		if strings.HasPrefix(result.MIME, "text/") || result.MIME == "application/json" || result.MIME == "application/xml" {
-			return "invalid_text_encoding"
+			return &manifest.Warning{Code: "invalid_text_encoding", DeclaredExtension: result.Extension}
 		}
-		return "unknown_type"
+		return &manifest.Warning{Code: "unknown_type", DeclaredExtension: result.Extension}
 	}
 	if !allowed[string(result.Type)] {
-		return "type_not_allowed"
+		return &manifest.Warning{Code: "type_not_allowed", DeclaredExtension: result.Extension}
 	}
-	return ""
+	return nil
 }
 
 func extensionWarning(result detect.Result) *manifest.Warning {

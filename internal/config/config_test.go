@@ -12,7 +12,9 @@ func TestDefault(t *testing.T) {
 		t.Fatalf("default config is invalid: %v", err)
 	}
 	if cfg.Profile.Name != "attachment-gate-v1" || cfg.Limits.MaxInputFileSize != 50<<20 ||
-		cfg.Limits.MaxExtractedTotalSize != 300<<20 || cfg.Policy.MalwareScanError != "reject_batch" {
+		cfg.Limits.MaxExtractedTotalSize != 300<<20 || cfg.Policy.MalwareScanError != "reject_batch" ||
+		cfg.Policy.UnknownType != "warn" || cfg.Policy.OfficeMacros != "warn" ||
+		cfg.Policy.LegacyOffice != "warn" || cfg.Policy.DetectorError != "warn" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }

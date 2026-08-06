@@ -81,7 +81,7 @@ func TestScanPublishesPartialManifest(t *testing.T) {
 	if err := json.Unmarshal(manifestData, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Outcome != "partial" || got.Summary.UploadedFiles != 3 || got.Summary.DiscoveredFiles != 9 || got.Summary.ApprovedFiles != 4 || got.Summary.RejectedFiles != 5 {
+	if got.Outcome != "partial" || got.Summary.UploadedFiles != 3 || got.Summary.DiscoveredFiles != 9 || got.Summary.ApprovedFiles != 5 || got.Summary.RejectedFiles != 4 {
 		t.Fatalf("unexpected result: outcome=%s summary=%+v", got.Outcome, got.Summary)
 	}
 	reasons := map[string]bool{}
@@ -90,8 +90,19 @@ func TestScanPublishesPartialManifest(t *testing.T) {
 			reasons[file.Reason.Code] = true
 		}
 	}
-	if !reasons["archive_checksum_error"] || !reasons["nested_archive_not_allowed"] || !reasons["executable_not_allowed"] || !reasons["symlink_not_allowed"] {
+	if !reasons["archive_checksum_error"] || !reasons["executable_not_allowed"] || !reasons["symlink_not_allowed"] {
 		t.Fatalf("missing rejections: %v", reasons)
+	}
+	foundNestedWarning := false
+	for _, file := range got.Files {
+		for _, warning := range file.Warnings {
+			if warning.Code == "nested_archive_not_allowed" {
+				foundNestedWarning = true
+			}
+		}
+	}
+	if !foundNestedWarning {
+		t.Fatal("nested archive did not warn and continue")
 	}
 	for _, relative := range []string{"01-notes.md", "02-project/main.py", "02-project/é.txt"} {
 		info, err := os.Stat(filepath.Join(resultDir, "approved", relative))
@@ -160,6 +171,70 @@ func TestScanRejectsMalwareInFileAndRawZIP(t *testing.T) {
 	for _, file := range got.Files[1:] {
 		if file.Reason == nil || file.Reason.Code != "malware_found" || file.OutputPath != nil {
 			t.Fatalf("malware was not omitted: %+v", file)
+		}
+	}
+}
+
+func TestScanAllowsExecutableCodeZIPWithWarnings(t *testing.T) {
+	if _, err := exec.LookPath("file"); err != nil {
+		t.Skip("file/libmagic is not installed")
+	}
+	root := t.TempDir()
+	quarantine, results, batchID := filepath.Join(root, "quarantine"), filepath.Join(root, "results"), "batch-code"
+	batchDir := filepath.Join(quarantine, batchID)
+	for _, directory := range []string{filepath.Join(batchDir, "blobs"), results} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code := testZIP(t, map[string][]byte{
+		"bin/server":     testPE(),
+		"dist/index.html": []byte("<html>ok</html>"),
+		"main.py":        []byte("print('ok')\n"),
+	})
+	writeTestBatch(t, batchDir, batchID, []testUpload{{ID: "code", Blob: "blob-code", Name: "code.zip", Data: code}})
+	socketURL := startFakeClamd(t, nil)
+	configPath := filepath.Join(root, "config.yaml")
+	configData := []byte("schema_version: 1\nroots:\n  quarantine: " + quarantine + "\n  results: " + results + "\nmalware:\n  socket: " + socketURL + "\n")
+	configData = append(configData, []byte("policy:\n  executable: warn\npaths:\n  exclude_directory_names: [.git, node_modules]\n")...)
+	if err := os.WriteFile(configPath, configData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resultDir := filepath.Join(results, batchID)
+	t.Cleanup(func() { makeDirectoriesWritable(resultDir) })
+	if err := Scan(context.Background(), ScanOptions{Input: batchDir, Output: resultDir, ConfigPath: configPath}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(resultDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got manifest.Manifest
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Outcome != "all_approved" || got.Summary.RejectedFiles != 0 || got.Summary.ApprovedFiles != 4 {
+		t.Fatalf("code ZIP was not fully approved: %+v", got.Summary)
+	}
+	for _, file := range got.Files {
+		if file.Decision != "approved" {
+			t.Fatalf("unexpected rejection: %+v", file)
+		}
+	}
+	foundExecutableWarning := false
+	for _, file := range got.Files {
+		for _, warning := range file.Warnings {
+			if warning.Code == "executable_found" {
+				foundExecutableWarning = true
+			}
+		}
+	}
+	if !foundExecutableWarning {
+		t.Fatal("executable member did not warn")
+	}
+	for _, relative := range []string{"01-code/bin/server", "01-code/dist/index.html"} {
+		if _, err := os.Stat(filepath.Join(resultDir, "approved", relative)); err != nil {
+			t.Fatalf("approved file %s missing: %v", relative, err)
 		}
 	}
 }

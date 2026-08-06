@@ -187,6 +187,7 @@ type Policy struct {
 	MalwareScanError  string `yaml:"malware_scan_error"`
 	OfficeMacros      string `yaml:"office_macros"`
 	LegacyOffice      string `yaml:"legacy_office"`
+	Executable        string `yaml:"executable"`
 }
 
 type Paths struct {
@@ -241,12 +242,13 @@ func Default() Config {
 			MaxDatabaseAge: Duration(72 * time.Hour),
 		},
 		Policy: Policy{
-			UnknownType:       "reject",
-			DetectorError:     "reject_file",
+			UnknownType:       "warn",
+			DetectorError:     "warn",
 			ExtensionMismatch: "warn",
 			MalwareScanError:  "reject_batch",
-			OfficeMacros:      "reject",
-			LegacyOffice:      "reject",
+			OfficeMacros:      "warn",
+			LegacyOffice:      "warn",
+			Executable:        "reject",
 		},
 		AllowedTypes: []string{
 			"document_pdf", "document_docx", "document_xlsx", "document_pptx",
@@ -396,11 +398,20 @@ func (m Malware) validate() error {
 }
 
 func (p Policy) validate() error {
-	if p.UnknownType != "reject" || p.OfficeMacros != "reject" || p.LegacyOffice != "reject" {
-		return fmt.Errorf("unknown, macro, and legacy document policies must reject")
+	if !oneOf(p.UnknownType, "warn", "reject") {
+		return fmt.Errorf("invalid policy.unknown_type %q", p.UnknownType)
 	}
-	if !oneOf(p.DetectorError, "reject", "reject_file", "reject_batch") {
+	if !oneOf(p.OfficeMacros, "warn", "reject") {
+		return fmt.Errorf("invalid policy.office_macros %q", p.OfficeMacros)
+	}
+	if !oneOf(p.LegacyOffice, "warn", "reject") {
+		return fmt.Errorf("invalid policy.legacy_office %q", p.LegacyOffice)
+	}
+	if !oneOf(p.DetectorError, "warn", "reject", "reject_file", "reject_batch") {
 		return fmt.Errorf("invalid policy.detector_error %q", p.DetectorError)
+	}
+	if !oneOf(p.Executable, "warn", "reject") {
+		return fmt.Errorf("invalid policy.executable %q", p.Executable)
 	}
 	if !oneOf(p.ExtensionMismatch, "warn", "reject") {
 		return fmt.Errorf("invalid policy.extension_mismatch %q", p.ExtensionMismatch)

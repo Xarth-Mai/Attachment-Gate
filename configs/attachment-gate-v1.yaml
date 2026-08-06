@@ -37,12 +37,13 @@ malware:
   max_database_age: 72h
 
 policy:
-  unknown_type: reject
-  detector_error: reject_file
+  unknown_type: warn
+  detector_error: warn
   extension_mismatch: warn
   malware_scan_error: reject_batch
-  office_macros: reject
-  legacy_office: reject
+  office_macros: warn
+  legacy_office: warn
+  executable: reject
 
 allowed_types:
   - document_pdf
