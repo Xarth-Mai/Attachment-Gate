@@ -73,6 +73,20 @@ func TestParseByteSize(t *testing.T) {
 	}
 }
 
+func TestPerFileCeilingAllows256MiB(t *testing.T) {
+	cfg := Default()
+	cfg.Limits.MaxInputFileSize = 256 << 20
+	cfg.Limits.MaxInputTotalSize = 512 << 20
+	cfg.Limits.MaxExtractedFileSize = 256 << 20
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("256MiB per-file limit was rejected: %v", err)
+	}
+	cfg.Limits.MaxInputFileSize++
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("per-file limit above 256MiB was accepted")
+	}
+}
+
 func TestValidateRejectsUnsafeConfig(t *testing.T) {
 	tests := map[string]func(*Config){
 		"relative root":  func(c *Config) { c.Roots.Quarantine = "relative" },

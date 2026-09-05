@@ -252,7 +252,7 @@ func TestScanRejectsMalwarePerExtractedEntry(t *testing.T) {
 		}
 	}
 	signature := []byte("X5O!P%@AP[4" + "\\PZX54(P^)7CC)7}$" + "EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*")
-	archiveData := testZIP(t, map[string][]byte{"bad.txt": signature, "good.txt": []byte("good\n")})
+	archiveData := testZIP(t, map[string][]byte{"bad.txt": bytes.Repeat(signature, 8), "good.txt": []byte("good\n")})
 	if bytes.Contains(archiveData, signature) {
 		t.Fatal("test signature was not compressed")
 	}

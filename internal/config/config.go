@@ -18,7 +18,7 @@ import (
 
 const (
 	SchemaVersion      = 1
-	HardMaxFileSize    = ByteSize(200 << 20)
+	HardMaxFileSize    = ByteSize(256 << 20)
 	HardMaxExtracted   = ByteSize(1 << 30)
 	HardMaxFileCount   = 10_000
 	maxConfigFileBytes = 1 << 20
