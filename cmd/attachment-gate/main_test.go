@@ -14,7 +14,7 @@ import (
 
 func TestVersionAndUsage(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := run(context.Background(), []string{"version"}, &stdout, &stderr); code != app.ExitOK || stdout.String() != "attachment-gate 0.1.4\n" {
+	if code := run(context.Background(), []string{"version"}, &stdout, &stderr); code != app.ExitOK || stdout.String() != "attachment-gate 0.1.5\n" {
 		t.Fatalf("version: code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	if code := run(context.Background(), nil, &stdout, &stderr); code != app.ExitUsage {
@@ -42,7 +42,7 @@ func TestPolicyIdentity(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.ToolVersion != "0.1.4" || got.Profile.Name != "papersite-input-v1" || got.Profile.Version != 7 || len(got.EffectiveConfigSHA256) != 64 {
+	if got.ToolVersion != "0.1.5" || got.Profile.Name != "papersite-input-v1" || got.Profile.Version != 7 || len(got.EffectiveConfigSHA256) != 64 {
 		t.Fatalf("unexpected policy identity: %+v", got)
 	}
 }

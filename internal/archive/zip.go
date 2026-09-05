@@ -498,7 +498,11 @@ func preflight(ctx context.Context, files []*zip.File, limits Limits) ([]entry, 
 			return nil, nil, 0, coded(CodeInvalid, file.Name, errors.New("directory has data"))
 		}
 
-		rawName, pathErr := safeName(file.Name, file.NonUTF8, isDir || reject != "" && strings.HasSuffix(file.Name, "/"), limits)
+		entryName, nonUTF8, nameErr := zipEntryName(file)
+		if nameErr != nil {
+			return nil, nil, 0, coded(CodeUnsafePath, file.Name, nameErr)
+		}
+		rawName, pathErr := safeName(entryName, nonUTF8, isDir || reject != "" && strings.HasSuffix(entryName, "/"), limits)
 		if pathErr != nil {
 			return nil, nil, 0, pathErr
 		}
@@ -547,6 +551,42 @@ func preflight(ctx context.Context, files []*zip.File, limits Limits) ([]entry, 
 		entries = append(entries, entry{file: file, source: rawName, name: name, isDir: isDir, reject: reject})
 	}
 	return entries, nodes, declared, nil
+}
+
+func zipEntryName(file *zip.File) (string, bool, error) {
+	if !file.NonUTF8 {
+		return file.Name, false, nil
+	}
+	rawName := []byte(file.Name)
+	extra := file.Extra
+	for len(extra) >= 4 {
+		fieldID := binary.LittleEndian.Uint16(extra[:2])
+		fieldSize := int(binary.LittleEndian.Uint16(extra[2:4]))
+		extra = extra[4:]
+		if fieldSize > len(extra) {
+			return "", true, errors.New("invalid ZIP extra field")
+		}
+		field := extra[:fieldSize]
+		extra = extra[fieldSize:]
+		if fieldID != 0x7075 {
+			continue
+		}
+		if len(field) < 5 || field[0] != 1 {
+			return "", true, errors.New("invalid Unicode path extra field")
+		}
+		if binary.LittleEndian.Uint32(field[1:5]) != crc32.ChecksumIEEE(rawName) {
+			return "", true, errors.New("Unicode path checksum mismatch")
+		}
+		name := field[5:]
+		if len(name) == 0 || !utf8.Valid(name) {
+			return "", true, errors.New("Unicode path is not UTF-8")
+		}
+		return string(name), false, nil
+	}
+	if len(extra) != 0 {
+		return "", true, errors.New("invalid ZIP extra field")
+	}
+	return file.Name, true, nil
 }
 
 func safeName(name string, nonUTF8, isDir bool, limits Limits) (string, error) {

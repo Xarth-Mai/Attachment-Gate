@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +15,27 @@ import (
 	"testing"
 	"time"
 )
+
+func TestUnicodePathExtraField(t *testing.T) {
+	rawName := []byte{0xc4, 0xe3, 0xba, 0xc3, '.', 't', 'x', 't'}
+	unicodeName := "你好.txt"
+	field := make([]byte, 9+len(unicodeName))
+	binary.LittleEndian.PutUint16(field[:2], 0x7075)
+	binary.LittleEndian.PutUint16(field[2:4], uint16(5+len(unicodeName)))
+	field[4] = 1
+	binary.LittleEndian.PutUint32(field[5:9], crc32.ChecksumIEEE(rawName))
+	copy(field[9:], unicodeName)
+	file := &zip.File{FileHeader: zip.FileHeader{Name: string(rawName), NonUTF8: true, Extra: field}}
+
+	name, nonUTF8, err := zipEntryName(file)
+	if err != nil || nonUTF8 || name != unicodeName {
+		t.Fatalf("zipEntryName() = %q, %v, %v", name, nonUTF8, err)
+	}
+	file.Extra[5] ^= 0xff
+	if _, _, err := zipEntryName(file); err == nil {
+		t.Fatal("zipEntryName accepted a stale Unicode path checksum")
+	}
+}
 
 type zipEntry struct {
 	name   string
