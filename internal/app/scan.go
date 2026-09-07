@@ -686,6 +686,10 @@ func validateOutputPath(result, root, batchID string) error {
 
 func checkDependencies(ctx context.Context, cfg *config.Config, detector detect.Detector) (string, *malware.Client, *manifest.MalwareEngine, error) {
 	fileCtx, cancel := context.WithTimeout(ctx, cfg.Limits.FileScanTimeout.Std())
+	if err := detect.CheckImageDecoders(fileCtx, cfg.AllowedTypes); err != nil {
+		cancel()
+		return "", nil, nil, err
+	}
 	version, err := detector.Version(fileCtx)
 	if err != nil {
 		cancel()

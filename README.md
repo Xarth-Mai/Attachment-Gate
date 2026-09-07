@@ -1,6 +1,6 @@
 # Attachment Gate
 
-Current version: `0.1.5`. Manifest schema: v1.
+Current version: `0.1.6`. Manifest schema: v1.
 
 Attachment Gate is a small Go CLI that turns an untrusted upload batch into a read-only set of approved files plus an auditable JSON manifest. It verifies declared sizes and hashes, detects real file types with libmagic, scans with ClamAV, and safely expands ZIP files.
 
@@ -102,3 +102,16 @@ This v1 intentionally has no service mode, plugin system, recursive archive supp
 ## License
 
 [Mozilla Public License 2.0](LICENSE).
+
+## Additional raster image formats
+
+Version 0.1.6 recognizes JPEG/MPO (`.jpg`, `.jpeg`, `.mpo`) using the existing JPEG header validator
+Profiles may opt into `image_gif`, `image_bmp`, `image_tiff`, `image_heif`, and `image_avif` in `allowed_types`; the default profile stays unchanged
+These additional formats require `python3 -I` with Pillow and, for HEIF, `pillow-heif`; the tested combination is `Pillow==12.3.0` and `pillow-heif==1.7.0`
+The interpreter must be on the scanner service PATH and modules must be available outside user site-packages; configure a service-accessible virtual environment or system packages
+Doctor and scan preflight fail if a configured decoder is unavailable
+Image headers must match their detected format and the primary image dimensions must remain within `max_image_pixels`; extended header probes also have a 1 GiB address-space limit and 30-second CPU limit, in addition to the scan timeout
+Gate still copies approved files unchanged; full pixel decoding, primary-frame selection, orientation correction and normalization belong to the consuming application
+SVG remains unsupported
+
+To run the extended-format tests, install the tested Pillow and pillow-heif versions in a virtual environment, prepend its `bin` directory to PATH, then run `go test ./...`

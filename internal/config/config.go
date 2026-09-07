@@ -500,7 +500,7 @@ func validateAllowedTypes(values []string) error {
 	allowed := map[string]struct{}{
 		"document_pdf": {}, "document_docx": {}, "document_xlsx": {}, "document_pptx": {},
 		"text_plain": {}, "text_source": {}, "text_data": {}, "image_png": {},
-		"image_jpeg": {}, "image_webp": {}, "archive_zip": {},
+		"image_jpeg": {}, "image_webp": {}, "image_gif": {}, "image_bmp": {}, "image_tiff": {}, "image_heif": {}, "image_avif": {}, "archive_zip": {},
 	}
 	if len(values) == 0 {
 		return fmt.Errorf("allowed_types must not be empty")

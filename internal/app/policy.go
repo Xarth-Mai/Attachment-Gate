@@ -66,9 +66,19 @@ func expectedExtensions(result detect.Result) []string {
 	case detect.TypeImagePNG:
 		return []string{".png"}
 	case detect.TypeImageJPEG:
-		return []string{".jpg", ".jpeg"}
+		return []string{".jpg", ".jpeg", ".mpo"}
 	case detect.TypeImageWebP:
 		return []string{".webp"}
+	case detect.TypeImageGIF:
+		return []string{".gif"}
+	case detect.TypeImageBMP:
+		return []string{".bmp"}
+	case detect.TypeImageTIFF:
+		return []string{".tif", ".tiff"}
+	case detect.TypeImageHEIF:
+		return []string{".heic", ".heif"}
+	case detect.TypeImageAVIF:
+		return []string{".avif"}
 	case detect.TypeArchiveZIP:
 		return []string{".zip"}
 	case detect.TypeTextSource, detect.TypeTextData:

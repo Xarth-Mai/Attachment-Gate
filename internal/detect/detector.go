@@ -37,6 +37,11 @@ const (
 	TypeImagePNG           Type = "image_png"
 	TypeImageJPEG          Type = "image_jpeg"
 	TypeImageWebP          Type = "image_webp"
+	TypeImageGIF           Type = "image_gif"
+	TypeImageBMP           Type = "image_bmp"
+	TypeImageTIFF          Type = "image_tiff"
+	TypeImageHEIF          Type = "image_heif"
+	TypeImageAVIF          Type = "image_avif"
 	TypeArchiveZIP         Type = "archive_zip"
 	TypeLegacyOffice       Type = "legacy_office"
 	TypeOfficeMacro        Type = "office_macro"
@@ -149,7 +154,7 @@ func (d Detector) classify(ctx context.Context, filePath string, result Result) 
 		return result, ctx.Err()
 	}
 
-	if result.Type == TypeImagePNG || result.Type == TypeImageJPEG || result.Type == TypeImageWebP {
+	if result.Type == TypeImagePNG || result.Type == TypeImageJPEG || result.Type == TypeImageWebP || extendedImageFormat(result.Type) != "" {
 		maxPixels := d.MaxImagePixels
 		if maxPixels == 0 {
 			maxPixels = defaultMaxImagePixels
@@ -180,6 +185,16 @@ func typeFromMIME(mediaType string) Type {
 		return TypeImageJPEG
 	case "image/webp":
 		return TypeImageWebP
+	case "image/gif":
+		return TypeImageGIF
+	case "image/bmp", "image/x-ms-bmp":
+		return TypeImageBMP
+	case "image/tiff":
+		return TypeImageTIFF
+	case "image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence":
+		return TypeImageHEIF
+	case "image/avif", "image/avif-sequence":
+		return TypeImageAVIF
 	case "application/zip", "application/x-zip", "application/x-zip-compressed":
 		return TypeArchiveZIP
 	case "application/vnd.ms-word.document.macroenabled.12",
@@ -423,6 +438,9 @@ func lowNULCount(runes, nuls uint64) bool {
 }
 
 func validateImage(ctx context.Context, filePath string, imageType Type, maxPixels uint64) error {
+	if format := extendedImageFormat(imageType); format != "" {
+		return validateExtendedImage(ctx, filePath, format, maxPixels)
+	}
 	file, err := os.Open(filePath)
 	if err != nil {
 		return err
