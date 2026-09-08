@@ -18,7 +18,7 @@ import (
 // version is intentionally committed so downstream release manifests can pin
 // the exact Attachment Gate contract. Release builds may still override it
 // with -ldflags "-X main.version=...".
-var version = "0.1.6"
+var version = "0.1.7"
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

@@ -520,7 +520,7 @@ func (s *scanner) detectorFailure(ctx context.Context, record *manifest.File, er
 		case securezip.CodeInvalidLimits:
 			return exitError(ExitInternal, "invalid archive limits")
 		default:
-			s.reject(record, string(code))
+			s.rejectArchive(record, string(code), err)
 			return nil
 		}
 	}
@@ -590,7 +590,7 @@ func (s *scanner) archiveFailure(ctx context.Context, record *manifest.File, err
 	case "":
 		return exitError(ExitInternal, "archive processing failed")
 	default:
-		s.reject(record, string(code))
+		s.rejectArchive(record, string(code), err)
 		return nil
 	}
 }
@@ -627,6 +627,28 @@ func (s *scanner) newFile(parentID *string, attachmentID, source, origin, kind s
 		Decision: "rejected",
 		Action:   "omitted",
 		Warnings: []manifest.Warning{},
+	}
+}
+
+// Only path validation errors contain safe, fixed explanations; I/O errors may
+// expose host paths and retain their code-only public representation.
+func (s *scanner) rejectArchive(record *manifest.File, code string, err error) {
+	s.reject(record, code)
+	var failure *securezip.Error
+	if code != string(securezip.CodeUnsafePath) || !errors.As(err, &failure) {
+		return
+	}
+	entry := failure.Entry
+	if len(entry) > 512 {
+		entry = entry[:512] + "…"
+	}
+	record.Reason.Entry = strconv.Quote(entry)
+	cause := failure.Err
+	for errors.Unwrap(cause) != nil {
+		cause = errors.Unwrap(cause)
+	}
+	if cause != nil {
+		record.Reason.Detail = cause.Error()
 	}
 }
 

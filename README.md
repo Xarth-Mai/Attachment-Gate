@@ -1,6 +1,6 @@
 # Attachment Gate
 
-Current version: `0.1.6`. Manifest schema: v1.
+Current version: `0.1.7`. Manifest schema: v1.
 
 Attachment Gate is a small Go CLI that turns an untrusted upload batch into a read-only set of approved files plus an auditable JSON manifest. It verifies declared sizes and hashes, detects real file types with libmagic, scans with ClamAV, and safely expands ZIP files.
 
@@ -115,3 +115,9 @@ Gate still copies approved files unchanged; full pixel decoding, primary-frame s
 SVG remains unsupported
 
 To run the extended-format tests, install the tested Pillow and pillow-heif versions in a virtual environment, prepend its `bin` directory to PATH, then run `go test ./...`
+
+### Archive path diagnostics
+
+An `archive_path_unsafe` rejection may include optional `reason.entry` and `reason.detail` fields in the v1 manifest. `entry` is a quoted, escaped archive member name, truncated to 512 source bytes (at most 4096 output characters); `detail` is a fixed path or encoding explanation of at most 256 characters. Host I/O paths are not included. Existing code-only reasons remain valid. Strict consumers must accept the optional fields before deploying a scanner that emits them.
+
+UTF-8 Chinese member names and valid Unicode Path extra fields are supported. Ambiguous filename encoding is rejected rather than guessed; Unix ownership metadata alone is not an unsafe path. The path traversal, symlink, duplicate-path and extraction limits remain unchanged.

@@ -10,11 +10,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	securezip "github.com/Xarth-Mai/Attachment-Gate/internal/archive"
 	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -188,9 +190,9 @@ func TestScanAllowsExecutableCodeZIPWithWarnings(t *testing.T) {
 		}
 	}
 	code := testZIP(t, map[string][]byte{
-		"bin/server":     testPE(),
+		"bin/server":      testPE(),
 		"dist/index.html": []byte("<html>ok</html>"),
-		"main.py":        []byte("print('ok')\n"),
+		"main.py":         []byte("print('ok')\n"),
 	})
 	writeTestBatch(t, batchDir, batchID, []testUpload{{ID: "code", Blob: "blob-code", Name: "code.zip", Data: code}})
 	socketURL := startFakeClamd(t, nil)
@@ -786,4 +788,64 @@ func containsMalware(data, needle []byte, inspectArchives bool) bool {
 		}
 	}
 	return false
+}
+
+func TestScanArchivePathDiagnostic(t *testing.T) {
+	if _, err := exec.LookPath("file"); err != nil {
+		t.Skip("file/libmagic is not installed")
+	}
+	root := t.TempDir()
+	quarantine, results := filepath.Join(root, "quarantine"), filepath.Join(root, "results")
+	batchID := "path-diagnostic"
+	batchDir := filepath.Join(quarantine, batchID)
+	for _, dir := range []string{filepath.Join(batchDir, "blobs"), results} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data := testZIP(t, map[string][]byte{"../分析.py": []byte("print(1)")})
+	writeTestBatch(t, batchDir, batchID, []testUpload{{ID: "a1", Blob: "blob-a", Name: "code.zip", Data: data}})
+	configPath := filepath.Join(root, "config.yaml")
+	configData := "schema_version: 1\nroots:\n  quarantine: " + quarantine + "\n  results: " + results + "\nmalware:\n  socket: " + startFakeClamd(t, []byte("not-present")) + "\n"
+	if err := os.WriteFile(configPath, []byte(configData), 0600); err != nil {
+		t.Fatal(err)
+	}
+	resultDir := filepath.Join(results, batchID)
+	t.Cleanup(func() { makeDirectoriesWritable(resultDir) })
+	if err := Scan(context.Background(), ScanOptions{Input: batchDir, Output: resultDir, ConfigPath: configPath}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(resultDir, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got manifest.Manifest
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	reason := got.Files[0].Reason
+	if reason == nil || reason.Code != "archive_path_unsafe" || reason.Entry != "\"../分析.py\"" || reason.Detail != "unsafe path component" {
+		t.Fatalf("missing diagnostic: %+v", reason)
+	}
+	if bytes.Contains(raw, []byte(root)) {
+		t.Fatal("manifest exposes host path")
+	}
+}
+
+func TestArchiveDiagnosticBounds(t *testing.T) {
+	for _, code := range []securezip.Code{securezip.CodeUnsafePath, securezip.CodeIO} {
+		s := &scanner{}
+		record := manifest.File{}
+		entry := "bad\n" + strings.Repeat("中", 600)
+		err := &securezip.Error{Code: code, Entry: entry, Err: errors.New("path contains a control character")}
+		s.rejectArchive(&record, string(code), err)
+		reason := s.files[0].Reason
+		if code == securezip.CodeIO {
+			if reason.Entry != "" || reason.Detail != "" {
+				t.Fatal("I/O errors must not expose diagnostic paths")
+			}
+		} else if len(reason.Entry) > 4096 || strings.ContainsRune(reason.Entry, '\n') || reason.Detail != "path contains a control character" {
+			t.Fatalf("unsafe diagnostic: %+v", reason)
+		}
+	}
 }

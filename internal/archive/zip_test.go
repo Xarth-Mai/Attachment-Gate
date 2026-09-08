@@ -467,3 +467,56 @@ func FuzzSafeName(f *testing.F) {
 		}
 	})
 }
+
+// Keep encoding failures distinct from path traversal without guessing legacy encodings.
+func TestZIPFilenameEncodingMatrix(t *testing.T) {
+	uid := []byte{0x75, 0x78, 3, 0, 1, 0, 0}
+	for _, tc := range []struct {
+		name    string
+		nonUTF8 bool
+		extra   []byte
+		want    string
+	}{
+		{"analysis.py", false, nil, ""},
+		{"数据/分析.py", false, nil, ""},
+		{"数据/分析.py", false, uid, ""},
+		{"数据/分析.py", true, uid, "path is not UTF-8"},
+		{"../分析.py", false, nil, "unsafe path component"},
+		{"/分析.py", false, nil, "path is not relative POSIX syntax"},
+		{"C:/分析.py", false, nil, "path is not relative POSIX syntax"},
+		{"a\\分析.py", false, nil, "path is not relative POSIX syntax"},
+		{"a\n分析.py", false, nil, "path contains a control character"},
+	} {
+		t.Run(tc.name+tc.want, func(t *testing.T) {
+			var data bytes.Buffer
+			writer := zip.NewWriter(&data)
+			header := &zip.FileHeader{Name: tc.name, NonUTF8: tc.nonUTF8, Extra: tc.extra, Method: zip.Deflate}
+			header.SetMode(0600)
+			member, err := writer.CreateHeader(header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = member.Write([]byte("print(1)")); err != nil {
+				t.Fatal(err)
+			}
+			if err = writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			filename := filepath.Join(t.TempDir(), "sample.zip")
+			if err = os.WriteFile(filename, data.Bytes(), 0600); err != nil {
+				t.Fatal(err)
+			}
+			_, err = Preflight(context.Background(), filename, DefaultLimits())
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			var failure *Error
+			if !errors.As(err, &failure) || failure.Entry != tc.name || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("unexpected diagnostic: %v", err)
+			}
+		})
+	}
+}

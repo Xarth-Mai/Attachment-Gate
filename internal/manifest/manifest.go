@@ -76,7 +76,9 @@ type Detected struct {
 }
 
 type Reason struct {
-	Code string `json:"code"`
+	Code   string `json:"code"`
+	Entry  string `json:"entry,omitempty"`
+	Detail string `json:"detail,omitempty"`
 }
 
 type Warning struct {

@@ -100,6 +100,8 @@
           "additionalProperties": false,
           "required": ["code"],
           "properties": {
+            "entry": { "type": "string", "maxLength": 4096 },
+            "detail": { "type": "string", "maxLength": 256 },
             "code": {
               "enum": [
                 "file_too_large", "type_not_allowed", "unknown_type", "type_detector_error", "extension_mismatch",
