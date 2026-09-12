@@ -3,6 +3,7 @@ package archive
 import (
 	"archive/zip"
 	"bytes"
+	"compress/flate"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -516,6 +517,87 @@ func TestZIPFilenameEncodingMatrix(t *testing.T) {
 			var failure *Error
 			if !errors.As(err, &failure) || failure.Entry != tc.name || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("unexpected diagnostic: %v", err)
+			}
+		})
+	}
+}
+
+func TestCompressedDirectories(t *testing.T) {
+	var payload bytes.Buffer
+	compressor, err := flate.NewWriter(&payload, flate.DefaultCompression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := compressor.Write([]byte("hidden payload")); err != nil {
+		t.Fatal(err)
+	}
+	if err := compressor.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		method uint16
+		data   []byte
+		size   uint64
+		crc    uint32
+		limit  int64
+		want   Code
+	}{
+		{name: "stored empty", method: zip.Store},
+		{name: "deflated empty", method: zip.Deflate, data: []byte{3, 0}},
+		{name: "stored payload", method: zip.Store, data: []byte("x"), want: CodeInvalid},
+		{name: "declared payload", method: zip.Deflate, data: payload.Bytes(), size: 14, want: CodeInvalid},
+		{name: "hidden payload", method: zip.Deflate, data: payload.Bytes(), want: CodeInvalid},
+		{name: "trailing payload", method: zip.Deflate, data: []byte{3, 0, 42}, want: CodeInvalid},
+		{name: "corrupt stream", method: zip.Deflate, data: []byte{7}, want: CodeInvalid},
+		{name: "truncated stream", method: zip.Deflate, data: []byte{3}, want: CodeInvalid},
+		{name: "nonzero crc", method: zip.Deflate, data: []byte{3, 0}, crc: 1, want: CodeInvalid},
+		{name: "compressed size limit", method: zip.Deflate, data: []byte{3, 0}, limit: 1, want: CodeLimitExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buffer bytes.Buffer
+			writer := zip.NewWriter(&buffer)
+			// Go's ZIP writer suppresses directory bodies; rename the placeholder
+			// after writing to reproduce archives produced by Python and Java
+			header := &zip.FileHeader{Name: "_rels!", Method: tc.method,
+				CompressedSize64: uint64(len(tc.data)), UncompressedSize64: tc.size, CRC32: tc.crc}
+			header.SetMode(os.ModeDir | 0o755)
+			body, err := writer.CreateRaw(header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := body.Write(tc.data); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			filename := filepath.Join(t.TempDir(), "input.zip")
+			if err := os.WriteFile(filename, bytes.ReplaceAll(buffer.Bytes(), []byte("_rels!"), []byte("_rels/")), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			limits := DefaultLimits()
+			if tc.limit != 0 {
+				limits.MaxFileBytes = tc.limit
+			}
+			stats, err := Preflight(context.Background(), filename, limits)
+			if ErrorCode(err) != tc.want {
+				t.Fatalf("Preflight: stats=%+v err=%v, want %s", stats, err, tc.want)
+			}
+			dest := filepath.Join(t.TempDir(), "out")
+			_, _, err = Extract(context.Background(), filename, dest, limits)
+			if ErrorCode(err) != tc.want {
+				t.Fatalf("Extract: err=%v, want %s", err, tc.want)
+			}
+			if tc.want != "" {
+				if _, err := os.Lstat(dest); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("rejected archive created output: %v", err)
+				}
+			} else {
+				if stats.Entries != 1 || stats.Directories != 1 || stats.Files != 0 {
+					t.Fatalf("unexpected stats: %+v", stats)
+				}
+				assertMode(t, filepath.Join(dest, "_rels"), 0o700)
 			}
 		})
 	}

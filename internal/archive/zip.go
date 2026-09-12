@@ -3,7 +3,9 @@ package archive
 
 import (
 	"archive/zip"
+	"bufio"
 	"bytes"
+	"compress/flate"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -98,7 +100,7 @@ func DefaultLimits() Limits {
 	}
 }
 
-// Preflight validates ZIP metadata and paths without reading file bodies.
+// Preflight validates ZIP metadata, paths, and compressed empty directories.
 func Preflight(ctx context.Context, zipPath string, limits Limits) (Stats, error) {
 	if err := validateLimits(limits); err != nil {
 		return Stats{}, err
@@ -494,8 +496,10 @@ func preflight(ctx context.Context, files []*zip.File, limits Limits) ([]entry, 
 			reject = CodeSpecialFile
 		}
 		isDir := modeType == os.ModeDir
-		if isDir && (file.UncompressedSize64 != 0 || file.CompressedSize64 != 0 || file.CRC32 != 0) {
-			return nil, nil, 0, coded(CodeInvalid, file.Name, errors.New("directory has data"))
+		if isDir {
+			if err := validateDirectory(ctx, file, limits.MaxFileBytes); err != nil {
+				return nil, nil, 0, err
+			}
 		}
 
 		entryName, nonUTF8, nameErr := zipEntryName(file)
@@ -551,6 +555,42 @@ func preflight(ctx context.Context, files []*zip.File, limits Limits) ([]entry, 
 		entries = append(entries, entry{file: file, source: rawName, name: name, isDir: isDir, reject: reject})
 	}
 	return entries, nodes, declared, nil
+}
+
+func validateDirectory(ctx context.Context, file *zip.File, maxBytes int64) error {
+	if file.UncompressedSize64 != 0 || file.CRC32 != 0 ||
+		(file.Method == zip.Store && file.CompressedSize64 != 0) {
+		return coded(CodeInvalid, file.Name, errors.New("directory has data"))
+	}
+	if file.CompressedSize64 == 0 {
+		return nil
+	}
+	if file.CompressedSize64 > uint64(maxBytes) {
+		return coded(CodeLimitExceeded, file.Name, errors.New("compressed directory exceeds limit"))
+	}
+	// zip.File.Open skips directory bodies; decode the raw stream and require
+	// both zero output and no trailing bytes instead of trusting its zero size
+	raw, err := file.OpenRaw()
+	if err != nil {
+		return classifyZIPError(file.Name, err)
+	}
+	compressed := bufio.NewReader(raw)
+	reader := flate.NewReader(compressed)
+	_, readErr := copyAtMost(ctx, io.Discard, reader, 0)
+	closeErr := reader.Close()
+	if ErrorCode(readErr) == CodeLimitExceeded {
+		return coded(CodeInvalid, file.Name, errors.New("directory has data"))
+	}
+	if readErr != nil {
+		return classifyZIPError(file.Name, readErr)
+	}
+	if closeErr != nil {
+		return classifyZIPError(file.Name, closeErr)
+	}
+	if _, err := compressed.ReadByte(); err != io.EOF {
+		return coded(CodeInvalid, file.Name, errors.New("directory has trailing data"))
+	}
+	return nil
 }
 
 func zipEntryName(file *zip.File) (string, bool, error) {
